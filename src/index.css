@@ -1,0 +1,112 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-display: var(--ct-font-display, "Plus Jakarta Sans", system-ui, sans-serif);
+  --font-sans: var(--ct-font-sans, "DM Sans", system-ui, sans-serif);
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+:root {
+  --ct-font-display: "Plus Jakarta Sans", system-ui, sans-serif;
+  --ct-font-sans: "DM Sans", system-ui, sans-serif;
+  --ct-canvas: #F4F6FB;
+  --ct-surface-1: #FFFFFF;
+  --ct-surface-2: #FFFFFF;
+  --ct-surface-3: #EEF1F8;
+  --ct-input: #F8FAFC;
+  --ct-text: #0F172A;
+  --ct-text-secondary: #475569;
+  --ct-text-tertiary: #64748B;
+  --ct-border: rgba(15, 23, 42, 0.09);
+  --ct-border-strong: rgba(15, 23, 42, 0.16);
+  --ct-header-bg: rgba(244, 246, 251, 0.92);
+  --ct-nav-bg: rgba(255, 255, 255, 0.94);
+}
+
+.dark {
+  --ct-canvas: #090A0F;
+  --ct-surface-1: #12141F;
+  --ct-surface-2: #1A1D2D;
+  --ct-surface-3: #22263A;
+  --ct-input: #161926;
+  --ct-text: #F8FAFC;
+  --ct-text-secondary: #94A3B8;
+  --ct-text-tertiary: #64748B;
+  --ct-border: rgba(255, 255, 255, 0.08);
+  --ct-border-strong: rgba(255, 255, 255, 0.16);
+  --ct-header-bg: rgba(9, 10, 15, 0.92);
+  --ct-nav-bg: rgba(18, 20, 31, 0.92);
+}
+
+@layer base {
+  html,
+  body {
+    background-color: var(--ct-canvas);
+    color: var(--ct-text);
+    font-family: var(--ct-font-sans);
+    -webkit-tap-highlight-color: transparent;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--ct-font-display);
+  }
+
+  input,
+  textarea,
+  p,
+  h1,
+  h2,
+  h3,
+  h4,
+  pre,
+  code,
+  .select-text {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* OS Safe-area insets for Android / iOS status bars & gesture bars */
+.safe-top-header {
+  padding-top: calc(0.75rem + env(safe-area-inset-top, 0px));
+  padding-bottom: 0.75rem;
+}
+
+.safe-bottom-nav {
+  padding-bottom: max(0.375rem, env(safe-area-inset-bottom, 0px));
+}
+
+/* Custom sleek scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.25);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.4);
+}
+
+/* Hide scrollbar for wheel scroller while preserving scroll behavior */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

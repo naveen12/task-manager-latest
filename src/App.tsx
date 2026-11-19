@@ -566,144 +566,144 @@ export default function App() {
     const nowMs = current.getTime();
     setNow(current);
 
-    if (isNativeAndroidPlatform() && !nativeSyncedOnceRef.current) {
+    const isNative = isNativeAndroidPlatform();
+    if (isNative && !nativeSyncedOnceRef.current) {
+      void syncHandledFromNative();
       return;
     }
 
-    const todayStr = formatDateToYMD(current);
-    const currentDay = current.getDay();
-    const dueAlerts: ActiveAlert[] = [];
-    // On Native Android, give AlarmManager + ExactAlarmReceiver a brief head start so WebView never
-    // steals a lock-screen alert, while still ringing in-app if native was delayed in foreground.
-    const isNative = isNativeAndroidPlatform();
-    const nativeGraceMs = isNative ? 2500 : 0;
-    const catchupWindowMs = isNative ? 60 * 1000 : 60 * 60 * 1000;
-
-    const isDueInWindow = (hour24: number, minute: number, key: string): boolean => {
-      if (firedKeysRef.current.has(key)) return false;
-      const scheduled = new Date(
-        current.getFullYear(),
-        current.getMonth(),
-        current.getDate(),
-        hour24,
-        minute,
-        0,
-        0
-      ).getTime();
-      const deltaMs = nowMs - scheduled;
-      if (
-        deltaMs >= nativeGraceMs &&
-        deltaMs <= catchupWindowMs &&
-        scheduled >= sessionStartMsRef.current - 60 * 1000
-      ) {
-        firedKeysRef.current.add(key);
-        persistFiredKeys(firedKeysRef.current);
-        return true;
+    const runEvaluation = (handledSlotKeys: Set<string>, isAlertActive: boolean) => {
+      if (isNative && isAlertActive) {
+        // Native AlarmRingActivity is actively ringing on screen — do not show duplicate in-app popup
+        return;
       }
-      return false;
+
+      const todayStr = formatDateToYMD(current);
+      const currentDay = current.getDay();
+      const dueAlerts: ActiveAlert[] = [];
+      const nativeGraceMs = isNative ? 2500 : 0;
+      const catchupWindowMs = isNative ? 60 * 1000 : 60 * 60 * 1000;
+
+      const isDueInWindow = (hour24: number, minute: number, key: string): boolean => {
+        if (firedKeysRef.current.has(key) || handledSlotKeys.has(key)) return false;
+        const scheduled = new Date(
+          current.getFullYear(),
+          current.getMonth(),
+          current.getDate(),
+          hour24,
+          minute,
+          0,
+          0
+        ).getTime();
+        const deltaMs = nowMs - scheduled;
+        if (
+          deltaMs >= nativeGraceMs &&
+          deltaMs <= catchupWindowMs &&
+          scheduled >= sessionStartMsRef.current - 60 * 1000
+        ) {
+          firedKeysRef.current.add(key);
+          persistFiredKeys(firedKeysRef.current);
+          return true;
+        }
+        return false;
+      };
+
+      // 1. Alarms
+      alarms.forEach((a) => {
+        if (!a.enabled) return;
+        if (a.days.length > 0 && !a.days.includes(currentDay)) return;
+        const key = `alarm:${a.id}:${todayStr}:${a.hour24}:${a.minute}`;
+        if (isDueInWindow(a.hour24, a.minute, key)) {
+          dueAlerts.push({
+            uid: key,
+            sourceId: a.id,
+            type: 'alarm',
+            name: a.label || 'Kairo Alarm',
+            timeLabel: format12HourTime(a.hour24, a.minute),
+            tone: a.tone,
+            customRingtoneId: a.customRingtoneId,
+            snoozeMinutes: a.snoozeMinutes ?? 5,
+            vibrationMode: a.vibrationMode ?? 'sound_and_vibrate',
+          });
+        }
+      });
+
+      const suppressNonAlarmInFocus =
+        focusState.running && settings.focusMuteInAppAlerts;
+
+      // 2. Reminders
+      if (!suppressNonAlarmInFocus) {
+        reminders.forEach((r) => {
+          if (!r.active || r.completed) return;
+          if (!doesReminderOccurOnDate(r, todayStr)) return;
+          const parsed = parseHHMM(r.time);
+          if (!parsed) return;
+          const key = `reminder:${r.id}:${todayStr}:${r.time}`;
+          if (isDueInWindow(parsed.hour24, parsed.minute, key)) {
+            dueAlerts.push({
+              uid: key,
+              sourceId: r.id,
+              type: 'reminder',
+              name: r.title,
+              timeLabel: format12HourTime(parsed.hour24, parsed.minute),
+              tone: 'zenith',
+            });
+          }
+        });
+
+        // 3. Tasks
+        tasks.forEach((t) => {
+          if (t.completed || t.dueDate !== todayStr) return;
+          const parsed = parseHHMM(t.dueTime);
+          if (!parsed) return;
+          const key = `task:${t.id}:${todayStr}:${t.dueTime}`;
+          if (isDueInWindow(parsed.hour24, parsed.minute, key)) {
+            dueAlerts.push({
+              uid: key,
+              sourceId: t.id,
+              type: 'task',
+              name: t.title,
+              timeLabel: format12HourTime(parsed.hour24, parsed.minute),
+              tone: 'dawn',
+            });
+          }
+        });
+      }
+
+      // 4. Snoozed Alerts
+      const dueSnoozes = snoozedAlerts.filter((entry) => {
+        const deltaMs = nowMs - entry.triggerAtMs;
+        return deltaMs >= nativeGraceMs && deltaMs <= catchupWindowMs;
+      });
+      if (dueSnoozes.length > 0) {
+        setSnoozedAlerts((prev) => prev.filter((entry) => nowMs < entry.triggerAtMs));
+        dueSnoozes.forEach((entry) => {
+          const snoozeUid = `${entry.alert.sourceId}-snooze-${entry.triggerAtMs}`;
+          if (firedKeysRef.current.has(snoozeUid) || handledSlotKeys.has(snoozeUid)) return;
+          firedKeysRef.current.add(snoozeUid);
+          persistFiredKeys(firedKeysRef.current);
+          const d = new Date(entry.triggerAtMs);
+          dueAlerts.push({
+            ...entry.alert,
+            uid: snoozeUid,
+            timeLabel: format12HourTime(d.getHours(), d.getMinutes()),
+          });
+        });
+      }
+
+      if (dueAlerts.length > 0) {
+        if (!isNative) {
+          enqueueAlerts(dueAlerts);
+        }
+      }
     };
 
-    // 1. Alarms
-    alarms.forEach((a) => {
-      if (!a.enabled) return;
-      if (a.days.length > 0 && !a.days.includes(currentDay)) return;
-      const key = `alarm:${a.id}:${todayStr}:${a.hour24}:${a.minute}`;
-      if (isDueInWindow(a.hour24, a.minute, key)) {
-        dueAlerts.push({
-          uid: key,
-          sourceId: a.id,
-          type: 'alarm',
-          name: a.label || 'Kairo Alarm',
-          timeLabel: format12HourTime(a.hour24, a.minute),
-          tone: a.tone,
-          customRingtoneId: a.customRingtoneId,
-          snoozeMinutes: a.snoozeMinutes ?? 5,
-          vibrationMode: a.vibrationMode ?? 'sound_and_vibrate',
-        });
-      }
-    });
-
-    const suppressNonAlarmInFocus =
-      focusState.running && settings.focusMuteInAppAlerts;
-
-    // 2. Reminders (deferred when Focus Quiet Shield is enabled)
-    if (!suppressNonAlarmInFocus) {
-      reminders.forEach((r) => {
-        if (!r.active || r.completed) return;
-        if (!doesReminderOccurOnDate(r, todayStr)) return;
-        const parsed = parseHHMM(r.time);
-        if (!parsed) return;
-        const key = `reminder:${r.id}:${todayStr}:${r.time}`;
-        if (isDueInWindow(parsed.hour24, parsed.minute, key)) {
-          dueAlerts.push({
-            uid: key,
-            sourceId: r.id,
-            type: 'reminder',
-            name: r.title,
-            timeLabel: format12HourTime(parsed.hour24, parsed.minute),
-            tone: 'zenith',
-          });
-        }
+    if (isNative) {
+      void syncHandledFromNative().then(({ handledSlotKeys, isAlertActive }) => {
+        runEvaluation(handledSlotKeys, isAlertActive);
       });
-
-      // 3. Tasks (deferred when Focus Quiet Shield is enabled)
-      tasks.forEach((t) => {
-        if (t.completed || t.dueDate !== todayStr) return;
-        const parsed = parseHHMM(t.dueTime);
-        if (!parsed) return;
-        const key = `task:${t.id}:${todayStr}:${t.dueTime}`;
-        if (isDueInWindow(parsed.hour24, parsed.minute, key)) {
-          dueAlerts.push({
-            uid: key,
-            sourceId: t.id,
-            type: 'task',
-            name: t.title,
-            timeLabel: format12HourTime(parsed.hour24, parsed.minute),
-            tone: 'dawn',
-          });
-        }
-      });
-    }
-
-    // 4. Snoozed Alerts (for Alarms, Reminders, and Tasks)
-    const dueSnoozes = snoozedAlerts.filter((entry) => {
-      const deltaMs = nowMs - entry.triggerAtMs;
-      return deltaMs >= nativeGraceMs && deltaMs <= catchupWindowMs;
-    });
-    if (dueSnoozes.length > 0) {
-      setSnoozedAlerts((prev) => prev.filter((entry) => nowMs < entry.triggerAtMs));
-      dueSnoozes.forEach((entry) => {
-        const snoozeUid = `${entry.alert.sourceId}-snooze-${entry.triggerAtMs}`;
-        if (firedKeysRef.current.has(snoozeUid)) return;
-        firedKeysRef.current.add(snoozeUid);
-        persistFiredKeys(firedKeysRef.current);
-        const d = new Date(entry.triggerAtMs);
-        dueAlerts.push({
-          ...entry.alert,
-          uid: snoozeUid,
-          timeLabel: format12HourTime(d.getHours(), d.getMinutes()),
-        });
-      });
-    }
-
-    if (dueAlerts.length > 0) {
-      if (isNative) {
-        // When screen is off / app is backgrounded, let native AlarmForegroundService own the lock screen
-        if (document.visibilityState !== 'visible') return;
-        void syncHandledFromNative().then(
-          ({ isAlertActive, activeSlotKey, handledSlotKeys }) => {
-            if (isAlertActive) return;
-            const safeDue = dueAlerts.filter(
-              (a) => !handledSlotKeys.has(a.uid) && activeSlotKey !== a.uid
-            );
-            if (safeDue.length > 0) {
-              enqueueAlerts(safeDue);
-            }
-          }
-        );
-      } else {
-        enqueueAlerts(dueAlerts);
-      }
+    } else {
+      runEvaluation(new Set(), false);
     }
   }, [
     alarms,

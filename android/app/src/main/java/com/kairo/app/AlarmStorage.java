@@ -65,6 +65,9 @@ public class AlarmStorage {
 
     public synchronized void addHandledAlert(String slotKey, String id, String type, String name,
                                              String timeLabel, String action, long snoozeUntilMs) {
+        if (slotKey != null && !slotKey.isEmpty()) {
+            markSlotPermanentlyHandled(slotKey);
+        }
         try {
             JSONArray arr = new JSONArray(prefs.getString(KEY_HANDLED_ALERTS, "[]"));
             JSONObject obj = new JSONObject();
@@ -81,8 +84,42 @@ public class AlarmStorage {
         } catch (JSONException ignored) {}
     }
 
+    public synchronized void markSlotPermanentlyHandled(String slotKey) {
+        if (slotKey == null || slotKey.isEmpty()) return;
+        try {
+            JSONArray perm = new JSONArray(prefs.getString("permanent_handled_slots", "[]"));
+            for (int i = 0; i < perm.length(); i++) {
+                if (slotKey.equals(perm.optString(i))) return;
+            }
+            perm.put(slotKey);
+            prefs.edit().putString("permanent_handled_slots", perm.toString()).apply();
+        } catch (JSONException ignored) {}
+    }
+
     public synchronized String getHandledAlertsJson() {
-        return prefs.getString(KEY_HANDLED_ALERTS, "[]");
+        try {
+            JSONArray arr = new JSONArray(prefs.getString(KEY_HANDLED_ALERTS, "[]"));
+            JSONArray perm = new JSONArray(prefs.getString("permanent_handled_slots", "[]"));
+            for (int i = 0; i < perm.length(); i++) {
+                String key = perm.optString(i);
+                boolean exists = false;
+                for (int j = 0; j < arr.length(); j++) {
+                    if (key.equals(arr.getJSONObject(j).optString("slotKey"))) {
+                        exists = true;
+                        break;
+                    }
+                }
+                if (!exists) {
+                    JSONObject obj = new JSONObject();
+                    obj.put("slotKey", key);
+                    obj.put("action", "stopped");
+                    arr.put(obj);
+                }
+            }
+            return arr.toString();
+        } catch (JSONException ignored) {
+            return prefs.getString(KEY_HANDLED_ALERTS, "[]");
+        }
     }
 
     public synchronized void clearHandledAlerts() {

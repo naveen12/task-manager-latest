@@ -384,6 +384,15 @@ export default function App() {
       stopAlertVibration();
       return;
     }
+
+    // On Native Android, native AlarmService owns ringtone and vibration.
+    // Mute Web Audio loop to prevent double ringing!
+    if (isNativeAndroidPlatform()) {
+      soundEngine.stopAlarmLoop();
+      stopAlertVibration();
+      return;
+    }
+
     const mode = activeAlert.vibrationMode ?? 'sound_and_vibrate';
     if (mode !== 'vibrate_only') {
       soundEngine.startAlarmLoop(
@@ -414,7 +423,9 @@ export default function App() {
       const fresh = incoming.filter((a) => !existingUids.has(a.uid));
       if (fresh.length === 0) return prev;
       fresh.forEach((a) => {
-        void showSystemAlertNotification(a);
+        if (!isNativeAndroidPlatform()) {
+          void showSystemAlertNotification(a);
+        }
       });
       return [...prev, ...fresh];
     });

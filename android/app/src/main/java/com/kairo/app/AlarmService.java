@@ -172,6 +172,21 @@ public class AlarmService extends Service {
     }
 
     private void startSoundAndVibration(String vibrationMode) {
+        // Stop any currently playing audio or vibration to prevent duplicate playback
+        if (mediaPlayer != null) {
+            try {
+                if (mediaPlayer.isPlaying()) mediaPlayer.stop();
+                mediaPlayer.release();
+            } catch (Exception ignored) {}
+            mediaPlayer = null;
+        }
+        if (vibrator != null) {
+            try {
+                vibrator.cancel();
+            } catch (Exception ignored) {}
+            vibrator = null;
+        }
+
         boolean allowVibrate = !"sound_only".equals(vibrationMode);
 
         // 1. Vibration

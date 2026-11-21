@@ -180,6 +180,10 @@ public class AlarmStorage {
         return ms;
     }
 
+    public synchronized void clearAllData() {
+        prefs.edit().clear().apply();
+    }
+
     public void saveWidgetSummary(int tasksLeft, int remindersLeft, String nextAlarm, String nextTaskTitle, String next3HoursJson, int items3hCount) {
         prefs.edit()
                 .putInt("widget_tasks_left", tasksLeft)

@@ -88,6 +88,7 @@ interface KairoAlarmNativePlugin {
     itemsInNext3HoursCount?: number;
   }) => Promise<{ updated: boolean }>;
   consumePendingQuickAdd?: () => Promise<{ target: string }>;
+  clearAllAlerts?: () => Promise<{ cleared: boolean }>;
 }
 
 interface CapacitorGlobal {
@@ -244,6 +245,16 @@ export async function syncNativeAndroidAlerts(
     });
   } catch {
     // Ignore when native plugin not installed yet
+  }
+}
+
+export async function clearAllNativeAlerts(): Promise<void> {
+  const plugin = getKairoAlarmPlugin();
+  if (!plugin || !plugin.clearAllAlerts) return;
+  try {
+    await plugin.clearAllAlerts();
+  } catch {
+    // Ignore
   }
 }
 

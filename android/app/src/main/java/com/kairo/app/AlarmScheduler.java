@@ -11,27 +11,70 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.HashSet;
+import java.util.Set;
+
 public class AlarmScheduler {
     private static final String TAG = "KairoAlarmScheduler";
     public static final String ACTION_TRIGGER_ALARM = "com.kairo.app.ACTION_TRIGGER_ALARM";
 
+    public static void syncAndScheduleAlerts(Context context, String newJson, String oldJson) {
+        Set<String> oldSlotKeys = extractSlotKeys(oldJson);
+        Set<String> newSlotKeys = extractSlotKeys(newJson);
+
+        // 1. Cancel any previously scheduled AlarmManager PendingIntent that is NOT in the new list
+        for (String oldKey : oldSlotKeys) {
+            if (!newSlotKeys.contains(oldKey)) {
+                cancelAlert(context, oldKey);
+            }
+        }
+
+        // 2. Schedule all future items in the new list
+        if (newJson != null && !newJson.isEmpty()) {
+            try {
+                JSONArray arr = new JSONArray(newJson);
+                long now = System.currentTimeMillis();
+                for (int i = 0; i < arr.length(); i++) {
+                    JSONObject obj = arr.getJSONObject(i);
+                    long triggerAtMs = obj.optLong("triggerAtMs", 0);
+                    if (triggerAtMs > now + 500) {
+                        scheduleSingleAlert(context, obj);
+                    }
+                }
+            } catch (JSONException e) {
+                Log.e(TAG, "Error scheduling alerts from JSON", e);
+            }
+        }
+    }
+
     public static void scheduleAll(Context context) {
         String json = AlarmStorage.getInstance(context).getScheduledAlertsJson();
-        if (json == null || json.isEmpty()) return;
+        syncAndScheduleAlerts(context, json, null);
+    }
 
+    private static Set<String> extractSlotKeys(String json) {
+        Set<String> keys = new HashSet<>();
+        if (json == null || json.isEmpty()) return keys;
         try {
             JSONArray arr = new JSONArray(json);
-            long now = System.currentTimeMillis();
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject obj = arr.getJSONObject(i);
-                long triggerAtMs = obj.optLong("triggerAtMs", 0);
-                if (triggerAtMs > now + 500) {
-                    scheduleSingleAlert(context, obj);
+                String slotKey = obj.optString("slotKey");
+                if (slotKey != null && !slotKey.isEmpty()) {
+                    keys.add(slotKey);
                 }
             }
-        } catch (JSONException e) {
-            Log.e(TAG, "Error scheduling all alerts from JSON", e);
+        } catch (JSONException ignored) {}
+        return keys;
+    }
+
+    public static void clearAllAlerts(Context context) {
+        String json = AlarmStorage.getInstance(context).getScheduledAlertsJson();
+        Set<String> keys = extractSlotKeys(json);
+        for (String key : keys) {
+            cancelAlert(context, key);
         }
+        AlarmStorage.getInstance(context).clearAllData();
     }
 
     public static void scheduleSingleAlert(Context context, JSONObject alertObj) {
@@ -66,7 +109,6 @@ public class AlarmScheduler {
                 flags
         );
 
-        // PendingIntent to launch app when clicking status bar alarm indicator
         Intent appIntent = new Intent(context, MainActivity.class);
         PendingIntent showPendingIntent = PendingIntent.getActivity(
                 context,
@@ -77,7 +119,6 @@ public class AlarmScheduler {
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
-                // Fallback if exact alarms permission is missing
                 Log.w(TAG, "Exact alarms permission missing. Scheduling fallback alarm for: " + slotKey);
                 alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMs, alarmPendingIntent);
             } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {

@@ -47,9 +47,10 @@ public class KairoAlarmPlugin extends Plugin {
         boolean gradualVolume = call.getBoolean("gradualVolume", true);
 
         AlarmStorage storage = AlarmStorage.getInstance(getContext());
+        String oldJson = storage.getScheduledAlertsJson();
         storage.saveScheduledAlerts(alertsJson, gradualVolume);
 
-        AlarmScheduler.scheduleAll(getContext());
+        AlarmScheduler.syncAndScheduleAlerts(getContext(), alertsJson, oldJson);
 
         int count = 0;
         try {
@@ -59,6 +60,14 @@ public class KairoAlarmPlugin extends Plugin {
 
         JSObject ret = new JSObject();
         ret.put("scheduled", count);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void clearAllAlerts(PluginCall call) {
+        AlarmScheduler.clearAllAlerts(getContext());
+        JSObject ret = new JSObject();
+        ret.put("cleared", true);
         call.resolve(ret);
     }
 

@@ -58,6 +58,7 @@ interface SettingsSectionProps {
   onTestLockScreenAlert?: () => Promise<boolean>;
   androidPermissions?: AndroidAlertPermissionsStatus;
   onTriggerAndroidPermission?: (kind: AndroidPermissionAction) => void;
+  onResetAllData?: () => void;
 }
 
 type SettingsSectionKey =
@@ -216,6 +217,7 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
   onTestLockScreenAlert,
   androidPermissions,
   onTriggerAndroidPermission,
+  onResetAllData,
 }) => {
   const [openSections, setOpenSections] = useState<
     Record<SettingsSectionKey, boolean>
@@ -956,21 +958,21 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
               id="settings-reset-confirm-title"
               className="text-lg font-semibold text-slate-900 dark:text-[#F8FAFC]"
             >
-              Do you want to reset to defaults?
+              Reset Settings or Factory Reset All Data?
             </h3>
 
             <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-[#94A3B8]">
-              This will restore theme, font size, app font, notification/focus toggles, auto-carryover, custom note folders, and auto-backup preferences back to their defaults. Your Tasks, Reminders, Alarms, and Notes will not be deleted.
+              Choose whether to reset UI preferences only or perform a full factory reset to clear all Tasks, Reminders, Alarms, Notes, and scheduled system alarms.
             </p>
 
-            <div className="mt-6 flex justify-end gap-2.5">
+            <div className="mt-6 flex flex-wrap justify-end gap-2">
               <button
                 type="button"
                 onClick={() => {
                   soundEngine.playTick(640, 0.015);
                   setShowResetConfirm(false);
                 }}
-                className="h-11 rounded-full px-5 text-xs font-medium text-slate-600 dark:text-[#94A3B8] hover:text-slate-900 dark:hover:text-[#F8FAFC] cursor-pointer"
+                className="h-11 rounded-full px-4 text-xs font-medium text-slate-600 dark:text-[#94A3B8] hover:text-slate-900 dark:hover:text-[#F8FAFC] cursor-pointer"
               >
                 Cancel
               </button>
@@ -981,9 +983,24 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
                   onUpdateSettings(DEFAULT_SETTINGS);
                   setShowResetConfirm(false);
                 }}
-                className="h-11 rounded-full bg-red-600 text-white dark:bg-[#ffb4ab] dark:text-[#690005] px-6 text-xs font-semibold transition-all cursor-pointer"
+                className="h-11 rounded-full bg-slate-200 dark:bg-white/10 text-slate-800 dark:text-[#F8FAFC] px-4 text-xs font-semibold hover:bg-slate-300 dark:hover:bg-white/20 transition-all cursor-pointer"
               >
-                Yes, Reset
+                Reset Settings Only
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  soundEngine.playTick(840, 0.025);
+                  if (onResetAllData) {
+                    onResetAllData();
+                  } else {
+                    onUpdateSettings(DEFAULT_SETTINGS);
+                  }
+                  setShowResetConfirm(false);
+                }}
+                className="h-11 rounded-full bg-red-600 text-white dark:bg-[#ffb4ab] dark:text-[#690005] px-5 text-xs font-semibold transition-all cursor-pointer"
+              >
+                Reset All App Data &amp; Alarms
               </button>
             </div>
           </div>

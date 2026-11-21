@@ -55,6 +55,7 @@ import {
   type NotificationPermissionState,
 } from './utils/notificationEngine';
 import {
+  clearAllNativeAlerts,
   computeUpcomingNativeAlerts,
   consumeNativeQuickAddTarget,
   fetchNativeHandledAlerts,
@@ -1159,6 +1160,31 @@ export default function App() {
     return scheduleNativeLockScreenTest(5);
   }, []);
 
+  const handleResetAllData = useCallback(async () => {
+    soundEngine.playTick(880, 0.03);
+    // 1. Clear Native Android Alarms & Storage
+    await clearAllNativeAlerts();
+
+    // 2. Clear Local Storage keys
+    Object.values(STORAGE_KEYS).forEach((key) => {
+      try {
+        localStorage.removeItem(key);
+      } catch {
+        // Ignore
+      }
+    });
+
+    // 3. Reset React states to initial defaults
+    setTasks(getInitialTasks());
+    setReminders(getInitialReminders());
+    setAlarms(INITIAL_ALARMS);
+    setNotes(getInitialNotes());
+    setSettings(DEFAULT_SETTINGS);
+    setSnoozedAlerts([]);
+    setAlertQueue([]);
+    firedKeysRef.current = new Set();
+  }, []);
+
   // Note CRUD handlers
   const handleCreateNote = useCallback(
     (data: Omit<NoteItem, 'id' | 'updatedAt'>) => {
@@ -1765,6 +1791,7 @@ export default function App() {
               onTriggerAndroidPermission={(kind) => {
                 void handleTriggerAndroidPermission(kind);
               }}
+              onResetAllData={handleResetAllData}
             />
           )}
         </div>
